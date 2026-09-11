@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L3GACY — Activer les notifications</title>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.init({
+      appId: "TON_ONESIGNAL_APP_ID",
+    });
+
+    document.getElementById('activate-btn').addEventListener('click', async () => {
+      await OneSignal.Notifications.requestPermission();
+      // Identifiant fixe pour cibler précisément cet appareil (le tien) depuis le serveur
+      await OneSignal.login('l3gacy-admin');
+      document.getElementById('status').textContent = "Notifications activées ✅";
+    });
+  });
+</script>
+<style>
+  body{
+    background:#0B0B0B;color:#F4F4F2;font-family:sans-serif;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    height:100vh;text-align:center;padding:20px;
+  }
+  button{
+    padding:16px 30px;background:#F4F4F2;color:#0B0B0B;border:none;
+    font-size:15px;font-weight:700;border-radius:2px;margin-top:20px;
+  }
+  p{color:#8B8B8B;max-width:32ch;margin-top:14px;}
+</style>
+</head>
+<body>
+  <h1>Notifications commandes L3GACY</h1>
+  <p>Ouvre cette page sur ton téléphone, dans ton navigateur, et clique sur le bouton pour recevoir une notification à chaque commande payée.</p>
+  <button id="activate-btn">Activer les notifications</button>
+  <p id="status"></p>
+</body>
+</html>
