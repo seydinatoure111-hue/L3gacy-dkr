@@ -96,37 +96,41 @@ app.post('/api/checkout', async (req, res) => {
     };
     writeOrders(orders);
 
-    const cinetpayRes = await fetch('https://api-checkout.cinetpay.com/v2/payment', {
+    const paytechRes = await fetch('https://paytech.sn/api/payment/request-payment', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'API_KEY': process.env.PAYTECH_API_KEY,
+        'API_SECRET': process.env.PAYTECH_API_SECRET,
+      },
       body: JSON.stringify({
-        apikey: process.env.CINETPAY_APIKEY,
-        site_id: process.env.CINETPAY_SITE_ID,
-        transaction_id,
-        amount,
+        item_name: items.map(i => i.title).join(', '),
+        item_price: amount,
         currency: 'XOF',
-        description: `Commande L3GACY - ${items.map(i => i.title).join(', ')}`,
-        channels: 'ALL', // le client choisit Wave / Orange Money / carte sur la page CinetPay
-        notify_url: process.env.NOTIFY_URL,   // ex: https://ton-backend.onrender.com/api/webhook/cinetpay
-        return_url: process.env.RETURN_URL,   // ex: https://l3gacy.netlify.app/merci
-        customer_name: (customer?.name || 'Client L3GACY').split(' ')[0],
-        customer_surname: (customer?.name || 'Client L3GACY').split(' ').slice(1).join(' ') || 'L3GACY',
-        customer_phone_number: customer?.phone || '',
-        customer_address: customer?.address || '',
-        customer_city: customer?.city || 'Dakar',
-        customer_country: 'SN',
+        ref_command: transaction_id,
+        command_name: `Commande L3GACY - ${items.map(i => i.title).join(', ')}`,
+        env: process.env.PAYTECH_ENV || 'test', // passe à "prod" une fois le compte activé
+        ipn_url: process.env.NOTIFY_URL,   // ex: https://ton-backend.onrender.com/api/webhook/paytech
+        success_url: process.env.RETURN_URL,
+        cancel_url: process.env.RETURN_URL,
+        custom_field: JSON.stringify({
+          name: customer?.name || '',
+          phone: customer?.phone || '',
+          address: customer?.address || '',
+        })
       })
     });
 
-    const data = await cinetpayRes.json();
+    const data = await paytechRes.json();
 
-    if (data.code !== '201' && data.code !== 201) {
-      console.error('Erreur CinetPay:', data);
+    if (data.success !== 1) {
+      console.error('Erreur PayTech:', data);
       return res.status(500).json({ error: 'Impossible de créer le paiement.', details: data });
     }
 
-    // data.data.payment_url : lien vers la page de paiement CinetPay (Wave / Orange Money / carte)
-    res.json({ payment_url: data.data.payment_url, transaction_id });
+    // data.redirect_url : lien vers la page de paiement PayTech (Wave / Orange Money / carte)
+    res.json({ payment_url: data.redirect_url, transaction_id });
 
   } catch (err) {
     console.error(err);
@@ -134,31 +138,29 @@ app.post('/api/checkout', async (req, res) => {
   }
 });
 
-// --- 2. CinetPay appelle cette URL automatiquement dès que le paiement change de statut ---
-app.post('/api/webhook/cinetpay', async (req, res) => {
+// --- 2. PayTech appelle cette URL automatiquement dès que le paiement est confirmé ---
+app.post('/api/webhook/paytech', async (req, res) => {
   try {
-    const { cpm_trans_id } = req.body;
-    if (!cpm_trans_id) return res.sendStatus(400);
+    const { type_event, ref_command, item_price, payment_method, api_key_sha256, api_secret_sha256, client_phone } = req.body;
+    if (!ref_command) return res.sendStatus(400);
 
-    // On revérifie toujours le statut auprès de CinetPay (ne jamais faire confiance au webhook seul)
-    const checkRes = await fetch('https://api-checkout.cinetpay.com/v2/payment/check', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        apikey: process.env.CINETPAY_APIKEY,
-        site_id: process.env.CINETPAY_SITE_ID,
-        transaction_id: cpm_trans_id,
-      })
-    });
-    const check = await checkRes.json();
+    // Vérification de sécurité : le hash doit correspondre à nos propres clés
+    const crypto = require('crypto');
+    const expectedKeyHash = crypto.createHash('sha256').update(process.env.PAYTECH_API_KEY).digest('hex');
+    const expectedSecretHash = crypto.createHash('sha256').update(process.env.PAYTECH_API_SECRET).digest('hex');
+
+    if (api_key_sha256 !== expectedKeyHash || api_secret_sha256 !== expectedSecretHash) {
+      console.error('Webhook PayTech : signature invalide, requête ignorée.');
+      return res.sendStatus(403);
+    }
 
     const orders = readOrders();
-    const order = orders[cpm_trans_id];
+    const order = orders[ref_command];
     if (!order) return res.sendStatus(200);
 
-    if (check.data && check.data.status === 'ACCEPTED') {
+    if (type_event === 'sale_complete') {
       order.status = 'PAYE';
-      order.payment_method = check.data.payment_method;
+      order.payment_method = payment_method || '';
       writeOrders(orders);
 
       const itemsList = order.items.map(i => `• ${i.title} — ${i.color}`).join('\n');
