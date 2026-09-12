@@ -109,9 +109,12 @@ app.post('/api/checkout', async (req, res) => {
         channels: 'ALL', // le client choisit Wave / Orange Money / carte sur la page CinetPay
         notify_url: process.env.NOTIFY_URL,   // ex: https://ton-backend.onrender.com/api/webhook/cinetpay
         return_url: process.env.RETURN_URL,   // ex: https://l3gacy.netlify.app/merci
-        customer_name: customer?.name || 'Client',
-        customer_surname: customer?.surname || 'L3GACY',
+        customer_name: (customer?.name || 'Client L3GACY').split(' ')[0],
+        customer_surname: (customer?.name || 'Client L3GACY').split(' ').slice(1).join(' ') || 'L3GACY',
         customer_phone_number: customer?.phone || '',
+        customer_address: customer?.address || '',
+        customer_city: customer?.city || 'Dakar',
+        customer_country: 'SN',
       })
     });
 
@@ -159,11 +162,12 @@ app.post('/api/webhook/cinetpay', async (req, res) => {
       writeOrders(orders);
 
       const itemsList = order.items.map(i => `• ${i.title} — ${i.color}`).join('\n');
+      const c = order.customer || {};
       await sendTelegramNotification(
-        `🛒 <b>Nouvelle commande payée</b>\n\n${itemsList}\n\n💰 ${order.amount} FCFA\n📱 ${order.payment_method || ''}`
+        `🛒 <b>Nouvelle commande payée</b>\n\n${itemsList}\n\n💰 ${order.amount} FCFA\n📱 ${order.payment_method || ''}\n\n👤 ${c.name || ''}\n📞 ${c.phone || ''}\n📍 ${c.address || ''}`
       );
       await sendOneSignalNotification(
-        `${order.items.map(i => i.title).join(', ')} — ${order.amount} FCFA`
+        `${order.items.map(i => i.title).join(', ')} — ${order.amount} FCFA — ${c.phone || ''}`
       );
     } else {
       order.status = 'ECHEC';

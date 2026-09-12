@@ -266,6 +266,11 @@
     <div id="cart-items"></div>
 
     <div id="cart-checkout" style="display:none;margin-top:40px;padding-top:30px;border-top:1px solid var(--line);">
+      <div class="color-label">Tes informations</div>
+      <input type="text" id="cust-name" placeholder="Nom et prénom" style="width:100%;padding:13px 16px;margin-bottom:10px;background:var(--panel);border:1px solid var(--line);color:var(--bone);font-size:14px;border-radius:2px;font-family:'Inter',sans-serif;">
+      <input type="tel" id="cust-phone" placeholder="Numéro de téléphone *" style="width:100%;padding:13px 16px;margin-bottom:10px;background:var(--panel);border:1px solid var(--line);color:var(--bone);font-size:14px;border-radius:2px;font-family:'Inter',sans-serif;">
+      <input type="text" id="cust-address" placeholder="Adresse précise (quartier, rue, repère...) *" style="width:100%;padding:13px 16px;margin-bottom:20px;background:var(--panel);border:1px solid var(--line);color:var(--bone);font-size:14px;border-radius:2px;font-family:'Inter',sans-serif;">
+
       <div class="color-label">Mode de paiement</div>
       <div class="color-buttons" id="pay-buttons">
         <button class="color-btn" onclick="selectPay('wave', this)">Wave</button>
@@ -454,6 +459,18 @@
   }
 
   async function confirmOrder(){
+    const phone = document.getElementById('cust-phone').value.trim();
+    const address = document.getElementById('cust-address').value.trim();
+    const name = document.getElementById('cust-name').value.trim();
+
+    if(!phone){
+      alert('Le numéro de téléphone est obligatoire.');
+      return;
+    }
+    if(!address){
+      alert('L\'adresse précise est obligatoire.');
+      return;
+    }
     if(!selectedPayMethod){
       alert('Choisis un mode de paiement (Wave ou Orange Money) avant de continuer.');
       return;
@@ -465,7 +482,10 @@
       const res = await fetch(`${BACKEND_URL}/api/checkout`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ items: cart })
+        body: JSON.stringify({
+          items: cart,
+          customer: { name, phone, address }
+        })
       });
       const data = await res.json();
       if(data.payment_url){
