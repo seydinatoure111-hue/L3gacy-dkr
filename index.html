@@ -230,6 +230,16 @@
         </div>
       </div>
 
+      <div class="card" data-name="test" onclick="showProduct('test')" style="opacity:0.55;">
+        <div class="card-visual" style="display:flex;align-items:center;justify-content:center;">
+          <span style="color:var(--grey);font-size:13px;text-align:center;padding:0 20px;">Article de test — 10 FCFA</span>
+        </div>
+        <div class="card-body">
+          <h3>TEST</h3>
+          <div class="price">Pour vérifier le paiement</div>
+        </div>
+      </div>
+
     </div>
   </section>
 
@@ -330,8 +340,16 @@
       },
       default: "blanc",
       single: true
+    },
+    test: {
+      title: "TEST",
+      colors: {},
+      default: "blanc",
+      single: true
     }
   };
+  // Le produit test réutilise simplement le visuel du tee Star (pas besoin d'un visuel dédié)
+  products.test.colors.blanc = products.star.colors.blanc;
 
   // Remplace par l'adresse de ton backend une fois déployé (ex: Render)
   const BACKEND_URL = "https://l3gacy-dkr.onrender.com";
