@@ -19,6 +19,7 @@ const PRICES = {
   'STAR VOL 1': 7000,
   'L3 VOL 1': 7000,
   'MIND VOL 1': 8000,
+  'RICH VOL 1': 7000,
 };
 function priceFor(title) {
   return PRICES[title] ?? 7000; // valeur de secours si un titre est inconnu
