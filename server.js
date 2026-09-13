@@ -184,13 +184,6 @@ app.post('/api/webhook/paytech', async (req, res) => {
 });
 
 // --- 3. Optionnel : vérifier le statut d'une commande depuis le frontend ---
-// --- Route de test : déclenche les notifications sans vrai paiement (à retirer plus tard) ---
-app.get('/api/test-notify', async (req, res) => {
-  await sendTelegramNotification('🧪 Ceci est un test — si tu reçois ce message, Telegram fonctionne.');
-  await sendOneSignalNotification('🧪 Ceci est un test — si tu reçois cette notif, OneSignal fonctionne.');
-  res.send('Notifications de test envoyées. Vérifie ton téléphone.');
-});
-
 app.get('/api/orders/:id', (req, res) => {
   const orders = readOrders();
   const order = orders[req.params.id];
