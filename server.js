@@ -9,7 +9,9 @@ const crypto = require('crypto');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => { req.rawBody = buf; }
+}));
 app.use(express.urlencoded({ extended: true })); // au cas où un service enverrait un webhook en POST classique
 
 const PORT = process.env.PORT || 3000;
@@ -151,26 +153,22 @@ app.post('/api/checkout', async (req, res) => {
 // --- 2. UnitechPay appelle cette URL automatiquement dès que le paiement est confirmé ---
 app.post('/api/webhook/unitechpay', async (req, res) => {
   try {
+    console.log('Webhook UnitechPay reçu:', JSON.stringify(req.body));
+
     const data = req.body;
     if (!data || !data.reference) return res.sendStatus(400);
 
-    // Vérification de sécurité : signature HMAC-SHA256 sur les champs stables du payload
-    // (méthode "body CDN-proof", recommandée derrière Cloudflare)
-    const signedString = [
-      data.event || '',
-      data.reference || '',
-      data.amount || '',
-      data.status || '',
-      data.signed_at || ''
-    ].join('|');
-
+    // Vérification de sécurité : signature HMAC-SHA256 sur le corps brut de la requête
+    const signature = req.headers['x-unitechpay-signature'];
     const expectedSignature = crypto
       .createHmac('sha256', process.env.UNITECHPAY_API_KEY)
-      .update(signedString)
+      .update(req.rawBody)
       .digest('hex');
 
-    if (expectedSignature !== data.signature) {
-      console.error('Webhook UnitechPay : signature invalide, requête ignorée.');
+    if (!signature || expectedSignature !== signature) {
+      console.error('Webhook UnitechPay : signature invalide, requête ignorée.', {
+        signature_recue: signature || '(aucune)',
+      });
       return res.sendStatus(401);
     }
 
