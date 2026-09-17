@@ -25,6 +25,27 @@
   #status{color:#F4F4F2;font-weight:600;white-space:pre-wrap;text-align:left;
     background:#161616;padding:14px;border-radius:6px;margin-top:20px;
     max-width:320px;font-size:12.5px;font-family:monospace;}
+
+  .orders-section{margin-top:50px;width:100%;max-width:420px;text-align:left;}
+  .orders-section h2{font-size:16px;text-align:center;color:#F4F4F2;margin-bottom:12px;}
+  #admin-code{
+    width:100%;padding:12px;background:#161616;border:1px solid #2A2A2A;color:#F4F4F2;
+    border-radius:6px;font-size:14px;box-sizing:border-box;margin-bottom:10px;
+  }
+  #load-orders-btn{margin-top:0;}
+  .order-card{
+    background:#161616;border-radius:8px;padding:14px;margin-top:12px;
+    font-size:13px;line-height:1.5;
+  }
+  .order-card .order-status{
+    display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;
+    margin-bottom:6px;
+  }
+  .status-PAYE{background:#1f5c2e;color:#c9f7d3;}
+  .status-PENDING{background:#5c4a1f;color:#f7e8c9;}
+  .status-ECHEC{background:#5c1f1f;color:#f7c9c9;}
+  #orders-list{max-height:60vh;overflow-y:auto;}
+  #orders-msg{font-size:13px;color:#8B8B8B;margin-top:10px;text-align:center;}
 </style>
 </head>
 <body>
@@ -33,9 +54,18 @@
   <button id="activate-btn">Activer les notifications</button>
   <p id="status"></p>
 
+  <div class="orders-section">
+    <h2>Historique des commandes</h2>
+    <input type="password" id="admin-code" placeholder="Code admin">
+    <button id="load-orders-btn">Voir les commandes</button>
+    <p id="orders-msg"></p>
+    <div id="orders-list"></div>
+  </div>
+
 <script>
   const statusEl = document.getElementById('status');
   const btn = document.getElementById('activate-btn');
+  const BACKEND_URL = "https://l3gacy-dkr.onrender.com";
 
   function log(msg){
     statusEl.textContent += msg + "\n";
@@ -83,6 +113,69 @@
     } catch (err) {
       log("❌ Erreur générale : " + (err && err.message ? err.message : JSON.stringify(err)));
       btn.disabled = false;
+    }
+  });
+
+  // --- Historique des commandes ---
+  const codeInput = document.getElementById('admin-code');
+  const loadBtn = document.getElementById('load-orders-btn');
+  const ordersMsg = document.getElementById('orders-msg');
+  const ordersList = document.getElementById('orders-list');
+
+  function escapeHtml(str){
+    return String(str || '').replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
+  }
+
+  function renderOrders(orders){
+    ordersList.innerHTML = '';
+    if (!orders.length) {
+      ordersMsg.textContent = 'Aucune commande pour le moment.';
+      return;
+    }
+    ordersMsg.textContent = orders.length + ' commande(s)';
+    orders.forEach(o => {
+      const c = o.customer || {};
+      const itemsText = (o.items || []).map(i => `${escapeHtml(i.title)} (${escapeHtml(i.color)})`).join(', ');
+      const date = o.created_at ? new Date(o.created_at).toLocaleString('fr-FR') : '';
+      const div = document.createElement('div');
+      div.className = 'order-card';
+      div.innerHTML = `
+        <span class="order-status status-${escapeHtml(o.status)}">${escapeHtml(o.status)}</span><br>
+        <b>${itemsText}</b><br>
+        💰 ${escapeHtml(o.amount)} FCFA — ${escapeHtml(o.payment_method || '')}<br>
+        👤 ${escapeHtml(c.name)}<br>
+        📞 ${escapeHtml(c.phone)}<br>
+        📍 ${escapeHtml(c.address) || 'adresse non renseignée'}<br>
+        <span style="color:#666;font-size:11px;">${date}</span>
+      `;
+      ordersList.appendChild(div);
+    });
+  }
+
+  loadBtn.addEventListener('click', async () => {
+    const code = codeInput.value.trim();
+    if (!code) {
+      ordersMsg.textContent = 'Entre le code admin d\'abord.';
+      return;
+    }
+    ordersMsg.textContent = 'Chargement...';
+    ordersList.innerHTML = '';
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/orders?secret=${encodeURIComponent(code)}`);
+      if (res.status === 401) {
+        ordersMsg.textContent = '❌ Code admin incorrect.';
+        return;
+      }
+      if (!res.ok) {
+        ordersMsg.textContent = '❌ Erreur serveur.';
+        return;
+      }
+      const orders = await res.json();
+      renderOrders(orders);
+    } catch (err) {
+      ordersMsg.textContent = '❌ Impossible de charger les commandes.';
     }
   });
 </script>

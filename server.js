@@ -199,6 +199,11 @@ app.post('/api/webhook/unitechpay', async (req, res) => {
       || ['payment_failed', 'payment_expired'].includes(data.event);
 
     if (isSuccess) {
+      if (order.status === 'PAYE') {
+        // Déjà traitée (UnitechPay a renvoyé le même webhook plusieurs fois) : on ne renotifie pas.
+        console.log('Webhook UnitechPay : commande déjà marquée payée, notification ignorée.', reference);
+        return res.sendStatus(200);
+      }
       order.status = 'PAYE';
       order.payment_method_confirmed = data.method || order.payment_method;
       writeOrders(orders);
@@ -209,7 +214,7 @@ app.post('/api/webhook/unitechpay', async (req, res) => {
         `🛒 <b>Nouvelle commande payée</b>\n\n${itemsList}\n\n💰 ${order.amount} FCFA\n📱 ${data.method || order.payment_method}\n\n👤 ${c.name || ''}\n📞 ${c.phone || ''}\n📍 ${c.address || ''}`
       );
       await sendOneSignalNotification(
-        `${order.items.map(i => i.title).join(', ')} — ${order.amount} FCFA — ${c.phone || ''}`
+        `${order.items.map(i => i.title).join(', ')} — ${order.amount} FCFA — ${c.phone || ''} — ${c.address || ''}`
       );
     } else if (isFailure) {
       order.status = 'ECHEC';
@@ -229,6 +234,34 @@ app.get('/api/orders/:id', (req, res) => {
   const order = orders[req.params.id];
   if (!order) return res.status(404).json({ error: 'Introuvable' });
   res.json(order);
+});
+
+// --- 4. Liste de toutes les commandes, protégée par un code admin (pour la page /admin) ---
+app.get('/api/orders', (req, res) => {
+  if (!process.env.ADMIN_SECRET || req.query.secret !== process.env.ADMIN_SECRET) {
+    return res.sendStatus(401);
+  }
+  const orders = readOrders();
+  const list = Object.values(orders).sort(
+    (a, b) => new Date(b.created_at) - new Date(a.created_at)
+  );
+  res.json(list);
+});
+
+// --- 4. Liste de toutes les commandes, pour la page /admin (protégée par une clé) ---
+app.get('/api/orders', (req, res) => {
+  const adminKey = process.env.ADMIN_KEY;
+  if (!adminKey) {
+    return res.status(500).json({ error: "ADMIN_KEY non configurée côté serveur." });
+  }
+  if (req.query.key !== adminKey) {
+    return res.status(403).json({ error: 'Accès refusé.' });
+  }
+  const orders = readOrders();
+  const list = Object.values(orders).sort(
+    (a, b) => new Date(b.created_at) - new Date(a.created_at)
+  );
+  res.json(list);
 });
 
 app.listen(PORT, () => console.log(`L3GACY backend lancé sur le port ${PORT}`));
