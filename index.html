@@ -496,7 +496,8 @@
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           items: cart,
-          customer: { name, phone, address }
+          customer: { name, phone, address },
+          payment_method: selectedPayMethod
         })
       });
       const data = await res.json();
