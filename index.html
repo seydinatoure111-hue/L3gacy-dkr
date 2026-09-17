@@ -282,7 +282,9 @@
       <div class="color-label">Tes informations</div>
       <input type="text" id="cust-name" placeholder="Nom et prénom" style="width:100%;padding:13px 16px;margin-bottom:10px;background:var(--panel);border:1px solid var(--line);color:var(--bone);font-size:14px;border-radius:2px;font-family:'Inter',sans-serif;">
       <input type="tel" id="cust-phone" placeholder="Numéro de téléphone *" style="width:100%;padding:13px 16px;margin-bottom:10px;background:var(--panel);border:1px solid var(--line);color:var(--bone);font-size:14px;border-radius:2px;font-family:'Inter',sans-serif;">
-      <input type="text" id="cust-address" placeholder="Adresse précise (quartier, rue, repère...) *" style="width:100%;padding:13px 16px;margin-bottom:20px;background:var(--panel);border:1px solid var(--line);color:var(--bone);font-size:14px;border-radius:2px;font-family:'Inter',sans-serif;">
+      <input type="text" id="cust-address" placeholder="Adresse précise : ville, quartier, rue, repère, n° villa *" style="width:100%;padding:13px 16px;margin-bottom:10px;background:var(--panel);border:1px solid var(--line);color:var(--bone);font-size:14px;border-radius:2px;font-family:'Inter',sans-serif;">
+      <button type="button" id="gps-btn" onclick="useMyLocation()" style="width:100%;padding:12px 16px;margin-bottom:20px;background:transparent;border:1px solid var(--line);color:var(--bone);font-size:13px;border-radius:2px;font-family:'Inter',sans-serif;">📍 Utiliser ma position actuelle</button>
+      <p id="gps-status" style="font-size:12px;color:#8B8B8B;margin:-14px 0 16px;"></p>
 
       <div class="color-label">Mode de paiement</div>
       <div class="color-buttons" id="pay-buttons">
@@ -433,6 +435,30 @@
 
     document.querySelectorAll('#color-section .color-btn').forEach(b => b.classList.remove('active'));
     if(btnEl) btnEl.classList.add('active');
+  }
+
+  function useMyLocation(){
+    const gpsStatus = document.getElementById('gps-status');
+    const addressInput = document.getElementById('cust-address');
+    if(!navigator.geolocation){
+      gpsStatus.textContent = "❌ Ta position n'est pas disponible sur cet appareil/navigateur.";
+      return;
+    }
+    gpsStatus.textContent = "📍 Récupération de ta position...";
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude.toFixed(6);
+        const lng = pos.coords.longitude.toFixed(6);
+        const mapsLink = `https://maps.google.com/?q=${lat},${lng}`;
+        const existing = addressInput.value.trim();
+        addressInput.value = existing ? `${existing} — ${mapsLink}` : mapsLink;
+        gpsStatus.textContent = "✅ Position ajoutée. Complète si besoin (repère, n° villa...).";
+      },
+      (err) => {
+        gpsStatus.textContent = "❌ Impossible de récupérer ta position (autorisation refusée ?). Écris ton adresse manuellement.";
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   }
 
   function addToCart(){
