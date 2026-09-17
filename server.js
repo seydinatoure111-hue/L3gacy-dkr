@@ -5,11 +5,12 @@ const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // CinetPay envoie le webhook en POST classique
+app.use(express.urlencoded({ extended: true })); // au cas où un service enverrait un webhook en POST classique
 
 const PORT = process.env.PORT || 3000;
 const ORDERS_FILE = path.join(__dirname, 'orders.json');
@@ -73,65 +74,72 @@ async function sendTelegramNotification(text) {
   });
 }
 
-// --- 1. Le client valide son panier : on crée la commande et on initialise le paiement CinetPay ---
+// --- UnitechPay : petit client HTTP réutilisable ---
+const UNITECHPAY_BASE = 'https://api.unitech.sn/api.php';
+async function unitechRequest(action, data = {}) {
+  const response = await fetch(`${UNITECHPAY_BASE}?action=${action}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.UNITECHPAY_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(data)
+  });
+  return response.json();
+}
+
+// --- 1. Le client valide son panier : on crée la commande et on initialise le paiement UnitechPay ---
 app.post('/api/checkout', async (req, res) => {
   try {
-    const { items, customer } = req.body;
+    const { items, customer, payment_method } = req.body;
     // items attendu : [{ title: "STAR VOL 1", color: "Blanc" }, ...]
+    // payment_method attendu : "wave" ou "orange"
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Panier vide.' });
     }
+    if (!['wave', 'orange'].includes(payment_method)) {
+      return res.status(400).json({ error: 'Mode de paiement invalide (wave ou orange attendu).' });
+    }
 
     const transaction_id = uuidv4();
     const amount = items.reduce((sum, item) => sum + priceFor(item.title), 0);
+    const description = `Commande L3GACY - ${items.map(i => i.title).join(', ')}`;
 
     const orders = readOrders();
     orders[transaction_id] = {
       transaction_id,
       items,
       customer: customer || {},
+      payment_method,
       amount,
       status: 'PENDING',
       created_at: new Date().toISOString()
     };
     writeOrders(orders);
 
-    const paytechRes = await fetch('https://paytech.sn/api/payment/request-payment', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'API_KEY': process.env.PAYTECH_API_KEY,
-        'API_SECRET': process.env.PAYTECH_API_SECRET,
-      },
-      body: JSON.stringify({
-        item_name: items.map(i => i.title).join(', '),
-        item_price: amount,
-        currency: 'XOF',
-        ref_command: transaction_id,
-        command_name: `Commande L3GACY - ${items.map(i => i.title).join(', ')}`,
-        env: process.env.PAYTECH_ENV || 'test', // passe à "prod" une fois le compte activé
-        ipn_url: process.env.NOTIFY_URL,   // ex: https://ton-backend.onrender.com/api/webhook/paytech
-        success_url: process.env.RETURN_URL,
-        cancel_url: process.env.RETURN_URL,
-        custom_field: JSON.stringify({
-          name: customer?.name || '',
-          phone: customer?.phone || '',
-          address: customer?.address || '',
-        })
-      })
+    const unitechAction = payment_method === 'wave' ? 'create_wave_payment' : 'create_orange_om';
+
+    const unitechRes = await unitechRequest(unitechAction, {
+      amount,
+      customer_number: customer?.phone || '',
+      description,
+      callback_success: process.env.RETURN_URL,
+      callback_cancel: process.env.RETURN_URL,
     });
 
-    const data = await paytechRes.json();
-
-    if (data.success !== 1) {
-      console.error('Erreur PayTech:', data);
-      return res.status(500).json({ error: 'Impossible de créer le paiement.', details: data });
+    if (!unitechRes.success) {
+      console.error('Erreur UnitechPay:', unitechRes);
+      return res.status(500).json({ error: 'Impossible de créer le paiement.', details: unitechRes });
     }
 
-    // data.redirect_url : lien vers la page de paiement PayTech (Wave / Orange Money / carte)
-    res.json({ payment_url: data.redirect_url, transaction_id });
+    // On garde la référence UnitechPay pour retrouver la commande quand le webhook arrivera
+    orders[transaction_id].unitech_reference = unitechRes.data.reference;
+    orders[transaction_id].unitech_transaction_id = unitechRes.data.transaction_id;
+    writeOrders(orders);
+
+    // data.payment_url : lien vers la page de paiement (Wave) ou deep link Orange Money
+    res.json({ payment_url: unitechRes.data.payment_url, transaction_id });
 
   } catch (err) {
     console.error(err);
@@ -139,40 +147,53 @@ app.post('/api/checkout', async (req, res) => {
   }
 });
 
-// --- 2. PayTech appelle cette URL automatiquement dès que le paiement est confirmé ---
-app.post('/api/webhook/paytech', async (req, res) => {
+// --- 2. UnitechPay appelle cette URL automatiquement dès que le paiement est confirmé ---
+app.post('/api/webhook/unitechpay', async (req, res) => {
   try {
-    const { type_event, ref_command, item_price, payment_method, api_key_sha256, api_secret_sha256, client_phone } = req.body;
-    if (!ref_command) return res.sendStatus(400);
+    const data = req.body;
+    if (!data || !data.reference) return res.sendStatus(400);
 
-    // Vérification de sécurité : le hash doit correspondre à nos propres clés
-    const crypto = require('crypto');
-    const expectedKeyHash = crypto.createHash('sha256').update(process.env.PAYTECH_API_KEY).digest('hex');
-    const expectedSecretHash = crypto.createHash('sha256').update(process.env.PAYTECH_API_SECRET).digest('hex');
+    // Vérification de sécurité : signature HMAC-SHA256 sur les champs stables du payload
+    // (méthode "body CDN-proof", recommandée derrière Cloudflare)
+    const signedString = [
+      data.event || '',
+      data.reference || '',
+      data.amount || '',
+      data.status || '',
+      data.signed_at || ''
+    ].join('|');
 
-    if (api_key_sha256 !== expectedKeyHash || api_secret_sha256 !== expectedSecretHash) {
-      console.error('Webhook PayTech : signature invalide, requête ignorée.');
-      return res.sendStatus(403);
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.UNITECHPAY_API_KEY)
+      .update(signedString)
+      .digest('hex');
+
+    if (expectedSignature !== data.signature) {
+      console.error('Webhook UnitechPay : signature invalide, requête ignorée.');
+      return res.sendStatus(401);
     }
 
     const orders = readOrders();
-    const order = orders[ref_command];
+    const transaction_id = Object.keys(orders).find(
+      id => orders[id].unitech_reference === data.reference
+    );
+    const order = transaction_id ? orders[transaction_id] : null;
     if (!order) return res.sendStatus(200);
 
-    if (type_event === 'sale_complete') {
+    if (data.event === 'payment_completed') {
       order.status = 'PAYE';
-      order.payment_method = payment_method || '';
+      order.payment_method_confirmed = data.method || order.payment_method;
       writeOrders(orders);
 
       const itemsList = order.items.map(i => `• ${i.title} — ${i.color}`).join('\n');
       const c = order.customer || {};
       await sendTelegramNotification(
-        `🛒 <b>Nouvelle commande payée</b>\n\n${itemsList}\n\n💰 ${order.amount} FCFA\n📱 ${order.payment_method || ''}\n\n👤 ${c.name || ''}\n📞 ${c.phone || ''}\n📍 ${c.address || ''}`
+        `🛒 <b>Nouvelle commande payée</b>\n\n${itemsList}\n\n💰 ${order.amount} FCFA\n📱 ${data.method || order.payment_method}\n\n👤 ${c.name || ''}\n📞 ${c.phone || ''}\n📍 ${c.address || ''}`
       );
       await sendOneSignalNotification(
         `${order.items.map(i => i.title).join(', ')} — ${order.amount} FCFA — ${c.phone || ''}`
       );
-    } else {
+    } else if (data.event === 'payment_failed' || data.event === 'payment_expired') {
       order.status = 'ECHEC';
       writeOrders(orders);
     }
