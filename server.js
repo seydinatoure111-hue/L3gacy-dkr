@@ -21,7 +21,7 @@ const PRICES = {
   'L3 VOL 1': 7000,
   'MIND VOL 1': 8000,
   'RICH VOL 1': 7000,
-  'TEE SHIRT DOOM': 10, // <-- produit test à 10 FCFA, à supprimer après le test
+  'TEE SHIRT DOOM': 1, // <-- produit test à 1 FCFA, à supprimer après le test
 };
 function priceFor(title) {
   return PRICES[title] ?? 7000; // valeur de secours si un titre est inconnu
