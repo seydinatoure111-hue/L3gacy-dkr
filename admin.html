@@ -148,9 +148,32 @@
         👤 ${escapeHtml(c.name)}<br>
         📞 ${escapeHtml(c.phone)}<br>
         📍 ${escapeHtml(c.address) || 'adresse non renseignée'}<br>
-        <span style="color:#666;font-size:11px;">${date}</span>
+        <span style="color:#666;font-size:11px;">${date}</span><br>
+        <label style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;cursor:pointer;">
+          <input type="checkbox" class="delivered-checkbox" data-id="${escapeHtml(o.transaction_id)}" ${o.delivered ? 'checked' : ''}>
+          Commande livrée
+        </label>
       `;
       ordersList.appendChild(div);
+    });
+
+    document.querySelectorAll('.delivered-checkbox').forEach(cb => {
+      cb.addEventListener('change', async () => {
+        const id = cb.dataset.id;
+        const code = codeInput.value.trim();
+        cb.disabled = true;
+        try {
+          await fetch(`${BACKEND_URL}/api/orders/${id}/delivered?secret=${encodeURIComponent(code)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ delivered: cb.checked })
+          });
+        } catch (err) {
+          alert('Erreur lors de la mise à jour.');
+          cb.checked = !cb.checked;
+        }
+        cb.disabled = false;
+      });
     });
   }
 

@@ -3,8 +3,6 @@ const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
-const fs = require('fs');
-const path = require('path');
 const crypto = require('crypto');
 
 const app = express();
@@ -15,7 +13,6 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: true })); // au cas où un service enverrait un webhook en POST classique
 
 const PORT = process.env.PORT || 3000;
-const ORDERS_FILE = path.join(__dirname, 'orders.json');
 
 // Prix par modèle (FCFA)
 const PRICES = {
@@ -29,13 +26,29 @@ function priceFor(title) {
   return PRICES[title] ?? 7000; // valeur de secours si un titre est inconnu
 }
 
-// --- Stockage simple des commandes (fichier JSON, suffisant pour démarrer) ---
-function readOrders() {
-  if (!fs.existsSync(ORDERS_FILE)) return {};
-  return JSON.parse(fs.readFileSync(ORDERS_FILE, 'utf-8'));
+// --- Stockage des commandes sur Upstash Redis (survit aux redéploiements, contrairement à un fichier local) ---
+async function readOrders() {
+  try {
+    const res = await fetch(`${process.env.UPSTASH_REDIS_REST_URL}/get/orders`, {
+      headers: { 'Authorization': `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` }
+    });
+    const data = await res.json();
+    return data.result ? JSON.parse(data.result) : {};
+  } catch (err) {
+    console.error('Erreur lecture des commandes (Upstash) :', err);
+    return {};
+  }
 }
-function writeOrders(orders) {
-  fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2));
+async function writeOrders(orders) {
+  try {
+    await fetch(`${process.env.UPSTASH_REDIS_REST_URL}/set/orders`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` },
+      body: JSON.stringify(orders)
+    });
+  } catch (err) {
+    console.error('Erreur écriture des commandes (Upstash) :', err);
+  }
 }
 
 // --- Notification OneSignal (push web, arrive comme une notif classique sur le téléphone) ---
@@ -91,6 +104,14 @@ async function unitechRequest(action, data = {}) {
   return response.json();
 }
 
+function checkAdminSecret(req, res) {
+  if (!process.env.ADMIN_SECRET || req.query.secret !== process.env.ADMIN_SECRET) {
+    res.sendStatus(401);
+    return false;
+  }
+  return true;
+}
+
 // --- 1. Le client valide son panier : on crée la commande et on initialise le paiement UnitechPay ---
 app.post('/api/checkout', async (req, res) => {
   try {
@@ -109,7 +130,7 @@ app.post('/api/checkout', async (req, res) => {
     const amount = items.reduce((sum, item) => sum + priceFor(item.title), 0);
     const description = `Commande L3GACY - ${items.map(i => i.title).join(', ')}`;
 
-    const orders = readOrders();
+    const orders = await readOrders();
     orders[transaction_id] = {
       transaction_id,
       items,
@@ -117,9 +138,10 @@ app.post('/api/checkout', async (req, res) => {
       payment_method,
       amount,
       status: 'PENDING',
+      delivered: false,
       created_at: new Date().toISOString()
     };
-    writeOrders(orders);
+    await writeOrders(orders);
 
     const unitechAction = payment_method === 'wave' ? 'create_wave_payment' : 'create_orange_om';
 
@@ -139,7 +161,7 @@ app.post('/api/checkout', async (req, res) => {
     // On garde la référence UnitechPay pour retrouver la commande quand le webhook arrivera
     orders[transaction_id].unitech_reference = unitechRes.data.reference;
     orders[transaction_id].unitech_transaction_id = unitechRes.data.transaction_id;
-    writeOrders(orders);
+    await writeOrders(orders);
 
     // data.payment_url : lien vers la page de paiement (Wave) ou deep link Orange Money
     res.json({ payment_url: unitechRes.data.payment_url, transaction_id });
@@ -175,16 +197,15 @@ app.post('/api/webhook/unitechpay', async (req, res) => {
 
     if (!signatureOk) {
       // NOTE TEMPORAIRE : le format réel envoyé par UnitechPay ne correspond pas exactement
-      // à la doc publique (pas d'en-tête X-Unitechpay-Signature observé). On journalise
-      // l'écart pour investigation, mais on NE bloque PAS le traitement pour l'instant
-      // afin que les commandes/notifications continuent de fonctionner.
+      // à la doc publique. On journalise l'écart pour investigation, mais on NE bloque PAS
+      // le traitement pour l'instant afin que les commandes/notifications continuent de fonctionner.
       console.warn('Webhook UnitechPay : signature non vérifiée (à corriger avec le support UnitechPay).', {
         signature_recue: signatureHeader || '(aucune, pas dans les en-têtes)',
         signature_dans_le_corps: data.signature || '(absente)',
       });
     }
 
-    const orders = readOrders();
+    const orders = await readOrders();
     const transaction_id = Object.keys(orders).find(
       id => orders[id].unitech_reference === reference
     );
@@ -206,7 +227,7 @@ app.post('/api/webhook/unitechpay', async (req, res) => {
       }
       order.status = 'PAYE';
       order.payment_method_confirmed = data.method || order.payment_method;
-      writeOrders(orders);
+      await writeOrders(orders);
 
       const itemsList = order.items.map(i => `• ${i.title} — ${i.color}`).join('\n');
       const c = order.customer || {};
@@ -218,7 +239,7 @@ app.post('/api/webhook/unitechpay', async (req, res) => {
       );
     } else if (isFailure) {
       order.status = 'ECHEC';
-      writeOrders(orders);
+      await writeOrders(orders);
     }
 
     res.sendStatus(200);
@@ -228,40 +249,33 @@ app.post('/api/webhook/unitechpay', async (req, res) => {
   }
 });
 
-// --- 3. Optionnel : vérifier le statut d'une commande depuis le frontend ---
-app.get('/api/orders/:id', (req, res) => {
-  const orders = readOrders();
+// --- 3. Vérifier le statut d'une commande depuis le frontend ---
+app.get('/api/orders/:id', async (req, res) => {
+  const orders = await readOrders();
   const order = orders[req.params.id];
   if (!order) return res.status(404).json({ error: 'Introuvable' });
   res.json(order);
 });
 
 // --- 4. Liste de toutes les commandes, protégée par un code admin (pour la page /admin) ---
-app.get('/api/orders', (req, res) => {
-  if (!process.env.ADMIN_SECRET || req.query.secret !== process.env.ADMIN_SECRET) {
-    return res.sendStatus(401);
-  }
-  const orders = readOrders();
+app.get('/api/orders', async (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const orders = await readOrders();
   const list = Object.values(orders).sort(
     (a, b) => new Date(b.created_at) - new Date(a.created_at)
   );
   res.json(list);
 });
 
-// --- 4. Liste de toutes les commandes, pour la page /admin (protégée par une clé) ---
-app.get('/api/orders', (req, res) => {
-  const adminKey = process.env.ADMIN_KEY;
-  if (!adminKey) {
-    return res.status(500).json({ error: "ADMIN_KEY non configurée côté serveur." });
-  }
-  if (req.query.key !== adminKey) {
-    return res.status(403).json({ error: 'Accès refusé.' });
-  }
-  const orders = readOrders();
-  const list = Object.values(orders).sort(
-    (a, b) => new Date(b.created_at) - new Date(a.created_at)
-  );
-  res.json(list);
+// --- 5. Marquer une commande comme livrée (ou non), depuis la page /admin ---
+app.post('/api/orders/:id/delivered', async (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const orders = await readOrders();
+  const order = orders[req.params.id];
+  if (!order) return res.status(404).json({ error: 'Introuvable' });
+  order.delivered = !!req.body.delivered;
+  await writeOrders(orders);
+  res.json(order);
 });
 
 // --- Route "santé" : utilisée par un service externe pour empêcher Render de s'endormir ---
