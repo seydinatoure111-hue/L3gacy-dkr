@@ -264,4 +264,9 @@ app.get('/api/orders', (req, res) => {
   res.json(list);
 });
 
+// --- Route "santé" : utilisée par un service externe pour empêcher Render de s'endormir ---
+app.get('/', (req, res) => {
+  res.send('L3GACY backend actif ✅');
+});
+
 app.listen(PORT, () => console.log(`L3GACY backend lancé sur le port ${PORT}`));
