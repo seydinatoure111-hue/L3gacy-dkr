@@ -160,6 +160,11 @@
       ordersMsg.textContent = 'Entre le code admin d\'abord.';
       return;
     }
+    try { localStorage.setItem('l3gacy_admin_code', code); } catch(e){}
+    loadOrders(code);
+  });
+
+  async function loadOrders(code){
     ordersMsg.textContent = 'Chargement...';
     ordersList.innerHTML = '';
     try {
@@ -177,7 +182,16 @@
     } catch (err) {
       ordersMsg.textContent = '❌ Impossible de charger les commandes.';
     }
-  });
+  }
+
+  // Au chargement de la page : si un code est déjà enregistré sur cet appareil, on recharge direct
+  try {
+    const savedCode = localStorage.getItem('l3gacy_admin_code');
+    if (savedCode) {
+      codeInput.value = savedCode;
+      loadOrders(savedCode);
+    }
+  } catch(e){}
 </script>
 </body>
 </html>
