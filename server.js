@@ -20,7 +20,6 @@ const PRICES = {
   'L3 VOL 1': 7000,
   'MIND VOL 1': 8000,
   'RICH VOL 1': 7000,
-  'TEE SHIRT DOOM': 10, // <-- produit test à 10 FCFA, à supprimer après le test
 };
 function priceFor(title) {
   return PRICES[title] ?? 7000; // valeur de secours si un titre est inconnu
@@ -115,6 +114,12 @@ function checkAdminSecret(req, res) {
 // --- 1. Le client valide son panier : on crée la commande et on initialise le paiement UnitechPay ---
 app.post('/api/checkout', async (req, res) => {
   try {
+    // Coupe-circuit : tant que SHOP_ENABLED n'est pas mis à "true" sur Render,
+    // aucune commande ne peut être créée, même en contournant le site.
+    if (process.env.SHOP_ENABLED !== 'true') {
+      return res.status(403).json({ error: 'La boutique n\'est pas encore ouverte aux commandes.' });
+    }
+
     const { items, customer, payment_method } = req.body;
     // items attendu : [{ title: "STAR VOL 1", color: "Blanc" }, ...]
     // payment_method attendu : "wave" ou "orange"
