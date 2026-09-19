@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 3000;
 
 // Prix par modèle (FCFA)
 const PRICES = {
-  'STAR VOL 1': 7000,
+  'STAR VOL 1': 86, // <-- prix test temporaire, remettre à 7000 après le test
   'L3 VOL 1': 7000,
   'MIND VOL 1': 8000,
   'RICH VOL 1': 7000,

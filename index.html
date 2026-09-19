@@ -409,13 +409,21 @@
 
     setColor(key, p.default, null);
 
-    // Tous les produits sont indisponibles pour le moment (boutique pas encore ouverte)
+    // Bouton actif uniquement pour STAR VOL 1 pour le moment (test), les autres restent indisponibles
     const btn = document.querySelector('#product-view .add-cart');
-    btn.disabled = true;
-    btn.style.opacity = '0.5';
-    btn.style.cursor = 'not-allowed';
-    btn.textContent = 'Indisponible — bientôt en vente';
-    btn.onclick = null;
+    if (key === 'star') {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.style.cursor = 'pointer';
+      btn.textContent = 'Ajouter au panier';
+      btn.onclick = addToCart;
+    } else {
+      btn.disabled = true;
+      btn.style.opacity = '0.5';
+      btn.style.cursor = 'not-allowed';
+      btn.textContent = 'Indisponible — bientôt en vente';
+      btn.onclick = null;
+    }
 
     window.scrollTo(0,0);
   }
