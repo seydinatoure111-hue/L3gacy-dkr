@@ -59,6 +59,7 @@
     <input type="password" id="admin-code" placeholder="Code admin">
     <button id="load-orders-btn">Voir les commandes</button>
     <p id="orders-msg"></p>
+    <div id="summary-panel" style="display:none;background:#161616;border-radius:8px;padding:14px;margin-top:14px;font-size:13px;line-height:1.8;"></div>
     <div id="orders-list"></div>
   </div>
 
@@ -128,8 +129,28 @@
     }[m]));
   }
 
+  function waLink(phone){
+    const digits = String(phone || '').replace(/\D/g, '');
+    const local = digits.startsWith('221') ? digits : '221' + digits.replace(/^0+/, '');
+    return `https://wa.me/${local}`;
+  }
+
+  function renderSummary(orders){
+    const summaryPanel = document.getElementById('summary-panel');
+    const paid = orders.filter(o => o.status === 'PAYE');
+    const revenue = paid.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+    const nonLivrees = paid.filter(o => !o.delivered).length;
+    summaryPanel.style.display = 'block';
+    summaryPanel.innerHTML = `
+      📦 <b>${orders.length}</b> commande(s) au total<br>
+      💰 <b>${revenue}</b> FCFA de revenu (commandes payées)<br>
+      🚚 <b>${nonLivrees}</b> commande(s) payée(s) non livrée(s)
+    `;
+  }
+
   function renderOrders(orders){
     ordersList.innerHTML = '';
+    renderSummary(orders);
     if (!orders.length) {
       ordersMsg.textContent = 'Aucune commande pour le moment.';
       return;
@@ -146,7 +167,7 @@
         <b>${itemsText}</b><br>
         💰 ${escapeHtml(o.amount)} FCFA — ${escapeHtml(o.payment_method || '')}<br>
         👤 ${escapeHtml(c.name)}<br>
-        📞 ${escapeHtml(c.phone)}<br>
+        📞 <a href="${waLink(c.phone)}" target="_blank" style="color:#25D366;text-decoration:underline;">${escapeHtml(c.phone)} (WhatsApp)</a><br>
         📍 ${escapeHtml(c.address) || 'adresse non renseignée'}<br>
         <span style="color:#666;font-size:11px;">${date}</span><br>
         <label style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;cursor:pointer;">
@@ -202,6 +223,16 @@
       }
       const orders = await res.json();
       renderOrders(orders);
+
+      // Stats de visite (affichées en plus, ne bloque pas si ça échoue)
+      try {
+        const statsRes = await fetch(`${BACKEND_URL}/api/stats?secret=${encodeURIComponent(code)}`);
+        if (statsRes.ok) {
+          const stats = await statsRes.json();
+          const summaryPanel = document.getElementById('summary-panel');
+          summaryPanel.innerHTML += `<br>👀 <b>${stats.total}</b> visite(s) au total, dont <b>${stats.today}</b> aujourd'hui`;
+        }
+      } catch(e){}
     } catch (err) {
       ordersMsg.textContent = '❌ Impossible de charger les commandes.';
     }

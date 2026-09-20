@@ -350,6 +350,7 @@
 
   // Remplace par l'adresse de ton backend une fois déployé (ex: Render)
   const BACKEND_URL = "https://l3gacy-dkr.onrender.com";
+  fetch(`${BACKEND_URL}/api/track`, { method: 'POST' }).catch(()=>{});
 
   let currentProductKey = null;
   let currentColorKey = null;

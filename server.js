@@ -103,6 +103,28 @@ async function unitechRequest(action, data = {}) {
   return response.json();
 }
 
+async function upstashIncr(key) {
+  try {
+    await fetch(`${process.env.UPSTASH_REDIS_REST_URL}/incr/${key}`, {
+      headers: { 'Authorization': `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` }
+    });
+  } catch (err) {
+    console.error('Erreur incrémentation stats (Upstash) :', err);
+  }
+}
+async function upstashGet(key) {
+  try {
+    const res = await fetch(`${process.env.UPSTASH_REDIS_REST_URL}/get/${key}`, {
+      headers: { 'Authorization': `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` }
+    });
+    const data = await res.json();
+    return data.result ? parseInt(data.result, 10) : 0;
+  } catch (err) {
+    console.error('Erreur lecture stats (Upstash) :', err);
+    return 0;
+  }
+}
+
 function checkAdminSecret(req, res) {
   if (!process.env.ADMIN_SECRET || req.query.secret !== process.env.ADMIN_SECRET) {
     res.sendStatus(401);
@@ -281,6 +303,22 @@ app.post('/api/orders/:id/delivered', async (req, res) => {
   order.delivered = !!req.body.delivered;
   await writeOrders(orders);
   res.json(order);
+});
+
+// --- 6. Suivi des visites du site (pour les statistiques sur /admin) ---
+app.post('/api/track', async (req, res) => {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  await upstashIncr('stats:visits:total');
+  await upstashIncr(`stats:visits:${today}`);
+  res.sendStatus(204);
+});
+
+app.get('/api/stats', async (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const total = await upstashGet('stats:visits:total');
+  const todayCount = await upstashGet(`stats:visits:${today}`);
+  res.json({ total, today: todayCount });
 });
 
 // --- Route "santé" : utilisée par un service externe pour empêcher Render de s'endormir ---
