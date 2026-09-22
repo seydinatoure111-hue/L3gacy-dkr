@@ -58,19 +58,10 @@
   }
   .coin-3d-wrap canvas{ display:block; }
 
-  /* PAGE D'ENTREE (GATE) */
-  #site-gate{
-    position:fixed;inset:0;z-index:9999;
-    background:#000;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-    overflow:hidden;
-    transition:opacity 0.6s ease;
-  }
-  #site-gate.gate-hidden{
-    opacity:0;pointer-events:none;
-  }
-  .gate-stars{
-    position:absolute;inset:0;overflow:hidden;
+  /* FOND ETOILE DE TOUT LE SITE */
+  .site-stars{
+    position:fixed;inset:0;overflow:hidden;
+    background:#000;pointer-events:none;
   }
   .gate-star{
     position:absolute;background:#fff;border-radius:50%;
@@ -80,29 +71,6 @@
     0%,100%{ opacity:0.2; }
     50%{ opacity:1; }
   }
-  /* FOND ETOILE DE TOUT LE SITE */
-  .site-stars{
-    position:fixed;inset:0;overflow:hidden;
-    background:#000;pointer-events:none;
-  }
-  .gate-coin-wrap{
-    width:240px;height:240px;position:relative;z-index:2;
-  }
-  .gate-shadow{
-    width:150px;height:26px;margin:0 auto;
-    background:radial-gradient(ellipse at center, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 72%);
-    position:relative;z-index:1;
-    margin-top:-18px;
-  }
-  .gate-enter-btn{
-    margin-top:34px;padding:14px 46px;
-    background:transparent;color:#F4F4F2;
-    border:1.5px solid #F4F4F2;border-radius:2px;
-    font-size:15px;font-weight:700;letter-spacing:3px;
-    cursor:pointer;position:relative;z-index:2;
-    font-family:'Inter',sans-serif;
-  }
-  .gate-enter-btn:hover{ background:#F4F4F2;color:#0B0B0B; }
   .hero-tag{
     display:inline-block;font-size:12.5px;color:var(--bone);
     border:1px solid var(--line);padding:6px 14px;border-radius:20px;
@@ -218,13 +186,6 @@
 <body>
 
 <div class="site-stars" id="site-stars"></div>
-
-<div id="site-gate">
-  <div class="gate-stars" id="gate-stars"></div>
-  <div class="gate-coin-wrap" id="gateCoin3d"></div>
-  <div class="gate-shadow"></div>
-  <button class="gate-enter-btn" id="gate-enter-btn">ENTER</button>
-</div>
 
 
 <nav>
@@ -710,7 +671,7 @@ function initCoin3D(containerId, size){
   animate();
 }
 
-initCoin3D('gateCoin3d', 240);
+initCoin3D('coin3d', 240);
 
 // --- Ciel étoilé (site entier + page d'entrée) ---
 function buildStars(containerId, count){
@@ -729,24 +690,6 @@ function buildStars(containerId, count){
   }
 }
 buildStars('site-stars', 200);
-buildStars('gate-stars', 140);
-
-// --- Bouton ENTER : révèle le site ---
-document.body.style.overflow = 'hidden';
-const gateEnterBtn = document.getElementById('gate-enter-btn');
-if(gateEnterBtn){
-  gateEnterBtn.addEventListener('click', function(){
-    const gate = document.getElementById('site-gate');
-    const heroContainer = document.getElementById('coin3d');
-    const gateCanvas = document.querySelector('#gateCoin3d canvas');
-    if(heroContainer && gateCanvas){
-      heroContainer.appendChild(gateCanvas);
-    }
-    gate.classList.add('gate-hidden');
-    document.body.style.overflow = '';
-    setTimeout(() => { gate.style.display = 'none'; }, 650);
-  });
-}
 })();
 </script>
 
