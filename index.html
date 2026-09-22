@@ -54,7 +54,7 @@
     border-bottom:1px solid var(--line);
   }
   .coin-3d-wrap{
-    width:260px;height:260px;margin:0 auto 28px;
+    width:240px;height:240px;margin:0 auto 28px;
   }
   .coin-3d-wrap canvas{ display:block; }
 
@@ -86,7 +86,7 @@
     background:#000;pointer-events:none;
   }
   .gate-coin-wrap{
-    width:220px;height:220px;position:relative;z-index:2;
+    width:240px;height:240px;position:relative;z-index:2;
   }
   .gate-shadow{
     width:150px;height:26px;margin:0 auto;
@@ -710,8 +710,7 @@ function initCoin3D(containerId, size){
   animate();
 }
 
-initCoin3D('coin3d', 260);
-initCoin3D('gateCoin3d', 220);
+initCoin3D('gateCoin3d', 240);
 
 // --- Ciel étoilé (site entier + page d'entrée) ---
 function buildStars(containerId, count){
@@ -738,6 +737,11 @@ const gateEnterBtn = document.getElementById('gate-enter-btn');
 if(gateEnterBtn){
   gateEnterBtn.addEventListener('click', function(){
     const gate = document.getElementById('site-gate');
+    const heroContainer = document.getElementById('coin3d');
+    const gateCanvas = document.querySelector('#gateCoin3d canvas');
+    if(heroContainer && gateCanvas){
+      heroContainer.appendChild(gateCanvas);
+    }
     gate.classList.add('gate-hidden');
     document.body.style.overflow = '';
     setTimeout(() => { gate.style.display = 'none'; }, 650);
