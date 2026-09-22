@@ -17,8 +17,9 @@
     --grey-dim:#555;
   }
   *{margin:0;padding:0;box-sizing:border-box;}
+  html{background:#000;}
   body{
-    background:var(--ink);color:var(--bone);
+    background:transparent;color:var(--bone);
     font-family:'Inter',sans-serif;line-height:1.5;
     -webkit-font-smoothing:antialiased;
   }
@@ -62,6 +63,7 @@
   .site-stars{
     position:fixed;inset:0;overflow:hidden;
     background:#000;pointer-events:none;
+    z-index:-1;
   }
   .gate-star{
     position:absolute;background:#fff;border-radius:50%;
