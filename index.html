@@ -698,9 +698,34 @@ function initCoin3D(containerId, size){
 
   scene.add(group);
 
+  // --- Rotation manuelle (souris/doigt) : reprend automatiquement quand on relâche ---
+  let isDragging = false;
+  let lastX = 0;
+  const canvas = renderer.domElement;
+  canvas.style.touchAction = 'none';
+  canvas.style.cursor = 'grab';
+
+  canvas.addEventListener('pointerdown', (e) => {
+    isDragging = true;
+    lastX = e.clientX;
+    canvas.style.cursor = 'grabbing';
+  });
+  window.addEventListener('pointermove', (e) => {
+    if(!isDragging) return;
+    const deltaX = e.clientX - lastX;
+    lastX = e.clientX;
+    group.rotation.y += deltaX * 0.012;
+  });
+  window.addEventListener('pointerup', () => {
+    isDragging = false;
+    canvas.style.cursor = 'grab';
+  });
+
   function animate(){
     requestAnimationFrame(animate);
-    group.rotation.y += 0.012;
+    if(!isDragging){
+      group.rotation.y += 0.012;
+    }
     renderer.render(scene, camera);
   }
   animate();
