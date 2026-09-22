@@ -68,7 +68,7 @@
   /* PAGE D'ENTREE (GATE) */
   #site-gate{
     position:fixed;inset:0;z-index:9999;
-    background:transparent;
+    background:#000;
     display:flex;flex-direction:column;align-items:center;justify-content:center;
     overflow:hidden;
     transition:opacity 0.6s ease;
@@ -78,6 +78,9 @@
   }
   .gate-coin-wrap{
     width:240px;height:240px;position:relative;z-index:2;
+  }
+  .gate-stars{
+    position:absolute;inset:0;overflow:hidden;
   }
   .gate-shadow{
     width:150px;height:26px;margin:0 auto;
@@ -225,6 +228,7 @@
 <div class="site-stars" id="site-stars"></div>
 
 <div id="site-gate">
+  <div class="gate-stars" id="gate-stars"></div>
   <div class="gate-coin-wrap" id="gateCoin3d"></div>
   <div class="gate-shadow"></div>
   <button class="gate-enter-btn" id="gate-enter-btn">ENTER</button>
@@ -737,6 +741,7 @@ function buildStars(containerId, count){
   }
 }
 buildStars('site-stars', 200);
+buildStars('gate-stars', 140);
 })();
 </script>
 
