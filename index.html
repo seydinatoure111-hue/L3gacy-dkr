@@ -294,6 +294,7 @@
       </div>
 
     </div>
+    <p id="no-results-msg" style="display:none;color:var(--grey);text-align:center;padding:30px 0;">Aucun tee shirt ne correspond à ta recherche.</p>
   </section>
 
 </div>
@@ -314,6 +315,12 @@
         <div id="color-section"></div>
 
         <button class="add-cart" disabled style="opacity:0.5;cursor:not-allowed;">Indisponible — bientôt en vente</button>
+
+        <div style="margin-top:16px;padding:16px;background:var(--panel);border:1px solid var(--line);border-radius:2px;text-align:center;">
+          <p style="margin:0 0 10px;font-size:13px;color:var(--bone);">Une question ? Contacte-nous :</p>
+          <a href="https://wa.me/221789213559" target="_blank" style="display:block;padding:11px;margin-bottom:8px;background:#25D366;color:#0B0B0B;font-weight:700;font-size:14px;border-radius:2px;">WhatsApp</a>
+          <a href="mailto:l3gacy.dkr@gmail.com" style="display:block;padding:11px;background:transparent;border:1px solid var(--line);color:var(--bone);font-size:14px;border-radius:2px;">l3gacy.dkr@gmail.com</a>
+        </div>
 
       </div>
     </div>
@@ -429,12 +436,20 @@
     window.scrollTo(0,0);
   }
 
+  function normalizeText(str){
+    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
   function filterProducts(){
-    const q = document.getElementById('search-input').value.trim().toLowerCase();
+    const q = normalizeText(document.getElementById('search-input').value.trim());
+    let visibleCount = 0;
     document.querySelectorAll('#product-grid .card').forEach(card => {
-      const name = card.getAttribute('data-name');
-      card.style.display = name.includes(q) ? '' : 'none';
+      const name = normalizeText(card.getAttribute('data-name'));
+      const match = name.includes(q);
+      card.style.display = match ? '' : 'none';
+      if(match) visibleCount++;
     });
+    document.getElementById('no-results-msg').style.display = visibleCount === 0 ? 'block' : 'none';
   }
 
   function showProduct(key){
@@ -698,9 +713,13 @@ function initCoin3D(containerId, size){
 
   scene.add(group);
 
-  // --- Rotation manuelle (souris/doigt) : reprend automatiquement quand on relâche ---
+  // --- Rotation manuelle (souris/doigt) avec élan : continue à la vitesse donnée, puis revient doucement à la vitesse normale ---
+  const BASE_SPEED = 0.012;
+  let currentSpeed = BASE_SPEED;
   let isDragging = false;
   let lastX = 0;
+  let lastMoveTime = 0;
+  let flickVelocity = 0;
   const canvas = renderer.domElement;
   canvas.style.touchAction = 'none';
   canvas.style.cursor = 'grab';
@@ -708,15 +727,25 @@ function initCoin3D(containerId, size){
   canvas.addEventListener('pointerdown', (e) => {
     isDragging = true;
     lastX = e.clientX;
+    lastMoveTime = performance.now();
+    flickVelocity = 0;
     canvas.style.cursor = 'grabbing';
   });
   window.addEventListener('pointermove', (e) => {
     if(!isDragging) return;
+    const now = performance.now();
+    const dt = Math.max(now - lastMoveTime, 1);
     const deltaX = e.clientX - lastX;
     lastX = e.clientX;
-    group.rotation.y += deltaX * 0.012;
+    lastMoveTime = now;
+    const rotationDelta = deltaX * 0.012;
+    group.rotation.y += rotationDelta;
+    flickVelocity = rotationDelta / (dt / 16.67); // vitesse normalisée par frame (~60fps)
   });
   window.addEventListener('pointerup', () => {
+    if(isDragging){
+      currentSpeed = flickVelocity; // la pièce continue à la vitesse du geste
+    }
     isDragging = false;
     canvas.style.cursor = 'grab';
   });
@@ -724,7 +753,9 @@ function initCoin3D(containerId, size){
   function animate(){
     requestAnimationFrame(animate);
     if(!isDragging){
-      group.rotation.y += 0.012;
+      group.rotation.y += currentSpeed;
+      // Revient très progressivement vers la vitesse de base (jamais totalement à l'arrêt)
+      currentSpeed += (BASE_SPEED - currentSpeed) * 0.02;
     }
     renderer.render(scene, camera);
   }
