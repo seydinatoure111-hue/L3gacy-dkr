@@ -258,7 +258,10 @@
       <div class="hero-tag" style="margin-bottom:14px;">VOL 1</div>
       <p>Les tee shirts seront bientôt disponibles. Restez à l'affût sur nos réseaux sociaux ci-dessous.</p>
     </div>
-    <input type="text" class="search-bar" id="search-input" placeholder="Rechercher un tee shirt..." oninput="filterProducts()">
+    <div style="position:relative;">
+      <input type="text" class="search-bar" id="search-input" placeholder="Rechercher un tee shirt..." oninput="filterProducts()" autocomplete="off">
+      <div id="search-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--panel);border:1px solid var(--line);border-top:none;border-radius:0 0 4px 4px;z-index:10;max-height:260px;overflow-y:auto;"></div>
+    </div>
     <div class="grid" id="product-grid">
 
       <div class="card" data-name="star vol 1" onclick="showProduct('star')">
@@ -294,7 +297,7 @@
       </div>
 
     </div>
-    <p id="no-results-msg" style="display:none;color:var(--grey);text-align:center;padding:30px 0;">Aucun tee shirt ne correspond à ta recherche.</p>
+
   </section>
 
 </div>
@@ -316,13 +319,12 @@
 
         <button class="add-cart" disabled style="opacity:0.5;cursor:not-allowed;">Indisponible — bientôt en vente</button>
 
-        <div style="margin-top:16px;padding:16px;background:var(--panel);border:1px solid var(--line);border-radius:2px;text-align:center;">
-          <p style="margin:0 0 10px;font-size:13px;color:var(--bone);">Une question ? Contacte-nous :</p>
-          <a href="https://wa.me/221789213559" target="_blank" style="display:block;padding:11px;margin-bottom:8px;background:#25D366;color:#0B0B0B;font-weight:700;font-size:14px;border-radius:2px;">WhatsApp</a>
-          <a href="mailto:l3gacy.dkr@gmail.com" style="display:block;padding:11px;background:transparent;border:1px solid var(--line);color:var(--bone);font-size:14px;border-radius:2px;">l3gacy.dkr@gmail.com</a>
-        </div>
-
       </div>
+    </div>
+
+    <div class="social-links" style="justify-content:center;margin-top:50px;padding-top:24px;border-top:1px solid var(--line);">
+      <a href="https://wa.me/221789213559" target="_blank" rel="noopener">WhatsApp</a>
+      <a href="mailto:l3gacy.dkr@gmail.com">l3gacy.dkr@gmail.com</a>
     </div>
   </div>
 </div>
@@ -442,15 +444,45 @@
 
   function filterProducts(){
     const q = normalizeText(document.getElementById('search-input').value.trim());
-    let visibleCount = 0;
-    document.querySelectorAll('#product-grid .card').forEach(card => {
-      const name = normalizeText(card.getAttribute('data-name'));
-      const match = name.includes(q);
-      card.style.display = match ? '' : 'none';
-      if(match) visibleCount++;
+    const suggestionsBox = document.getElementById('search-suggestions');
+    suggestionsBox.innerHTML = '';
+
+    if(!q){
+      suggestionsBox.style.display = 'none';
+      return;
+    }
+
+    const matches = Object.keys(products).filter(key =>
+      normalizeText(products[key].title).includes(q)
+    );
+
+    if(matches.length === 0){
+      suggestionsBox.style.display = 'block';
+      suggestionsBox.innerHTML = '<div style="padding:14px 16px;color:var(--grey);font-size:14px;">Aucun tee shirt ne correspond à ta recherche.</div>';
+      return;
+    }
+
+    suggestionsBox.style.display = 'block';
+    matches.forEach(key => {
+      const item = document.createElement('div');
+      item.textContent = products[key].title;
+      item.style.cssText = 'padding:14px 16px;cursor:pointer;font-size:14.5px;border-bottom:1px solid var(--line);';
+      item.addEventListener('click', () => {
+        document.getElementById('search-input').value = '';
+        suggestionsBox.style.display = 'none';
+        showProduct(key);
+      });
+      suggestionsBox.appendChild(item);
     });
-    document.getElementById('no-results-msg').style.display = visibleCount === 0 ? 'block' : 'none';
   }
+
+  document.addEventListener('click', (e) => {
+    const box = document.getElementById('search-suggestions');
+    const input = document.getElementById('search-input');
+    if(box && input && !box.contains(e.target) && e.target !== input){
+      box.style.display = 'none';
+    }
+  });
 
   function showProduct(key){
     const p = products[key];
@@ -796,8 +828,8 @@ function buildStars(containerId, count){
     wrap.appendChild(s);
   }
 }
-buildStars('site-stars', 200);
-buildStars('gate-stars', 140);
+buildStars('site-stars', 900);
+buildStars('gate-stars', 400);
 })();
 </script>
 
