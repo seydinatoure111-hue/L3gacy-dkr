@@ -211,25 +211,31 @@ app.post('/api/webhook/unitechpay', async (req, res) => {
     const reference = data && (data.reference || data.transaction_reference);
     if (!data || !reference) return res.sendStatus(400);
 
-    // Vérification de sécurité : signature HMAC-SHA256 (méthode documentée : en-tête + corps brut)
+    // Vérification de sécurité : signature HMAC-SHA256 (même format que le code existant :
+    // en-tête x-unitechpay-signature = HMAC-SHA256 hex du corps brut, clé = UNITECHPAY_API_KEY).
+    // Signature absente, mal formée ou invalide => on refuse AVANT toute lecture/modification de commande.
+    if (!process.env.UNITECHPAY_API_KEY) {
+      console.error('Webhook UnitechPay refusé : UNITECHPAY_API_KEY non définie, impossible de vérifier la signature.');
+      return res.sendStatus(500);
+    }
+
     const signatureHeader = req.headers['x-unitechpay-signature'];
     let signatureOk = false;
-    if (signatureHeader) {
-      const expectedSignature = crypto
+    if (typeof signatureHeader === 'string' && signatureHeader && Buffer.isBuffer(req.rawBody)) {
+      const expected = crypto
         .createHmac('sha256', process.env.UNITECHPAY_API_KEY)
         .update(req.rawBody)
-        .digest('hex');
-      signatureOk = expectedSignature === signatureHeader;
+        .digest(); // 32 octets
+      const received = Buffer.from(signatureHeader.trim(), 'hex');
+      signatureOk = received.length === expected.length && crypto.timingSafeEqual(received, expected);
     }
 
     if (!signatureOk) {
-      // NOTE TEMPORAIRE : le format réel envoyé par UnitechPay ne correspond pas exactement
-      // à la doc publique. On journalise l'écart pour investigation, mais on NE bloque PAS
-      // le traitement pour l'instant afin que les commandes/notifications continuent de fonctionner.
-      console.warn('Webhook UnitechPay : signature non vérifiée (à corriger avec le support UnitechPay).', {
-        signature_recue: signatureHeader || '(aucune, pas dans les en-têtes)',
+      console.warn('Webhook UnitechPay refusé : signature absente ou invalide.', {
+        signature_recue: typeof signatureHeader === 'string' && signatureHeader ? signatureHeader : '(aucune, pas dans les en-têtes)',
         signature_dans_le_corps: data.signature || '(absente)',
       });
+      return res.sendStatus(401);
     }
 
     const orders = await readOrders();
