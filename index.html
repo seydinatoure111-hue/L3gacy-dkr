@@ -244,18 +244,18 @@
   @keyframes slideFromRight{from{opacity:0;transform:translateX(36px)}to{opacity:1;transform:none}}
   @keyframes slideFromLeft{from{opacity:0;transform:translateX(-36px)}to{opacity:1;transform:none}}
   .grid-home-slot{position:relative;}
-  .arrow{
-    position:absolute;top:50%;z-index:5;width:40px;height:40px;
-    display:flex;align-items:center;justify-content:center;
-    background:rgba(255,255,255,.82);border:1.5px solid #000;border-radius:2px;color:#000;
-    transform:translateY(-50%);
+  .carousel-row{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:20px;
   }
-  .arrow-prev{left:6px;}
-  .arrow-next{right:6px;}
+  .arrow{
+    flex:none;width:48px;height:48px;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--panel);border:1.5px solid #000;border-radius:50%;color:#000;
+  }
   .arrow:hover{background:#000;color:#fff;}
   .arrow svg{width:20px;height:20px;display:block;}
   .arrow:focus-visible,.dot:focus-visible,.see-all-btn:focus-visible{outline:2px solid #000;outline-offset:3px;}
-  .dots{display:flex;justify-content:center;gap:14px;margin-top:20px;}
+  .dots{display:flex;justify-content:center;gap:14px;}
   .dot{
     width:16px;height:16px;padding:0;border-radius:50%;
     background:transparent;border:2px solid #000;
@@ -264,7 +264,7 @@
   .dot.active{background:#000;}
   .see-all-btn{
     display:block;width:100%;max-width:320px;margin:20px auto 0;padding:15px 20px;
-    background:#000;color:#fff;border:none;border-radius:2px;font-size:14px;font-weight:700;
+    background:#000;color:#fff;border:none;border-radius:999px;font-size:14px;font-weight:700;
   }
   .see-all-btn:hover{opacity:.88;}
   .all-title{font-size:clamp(28px,4vw,40px);margin-bottom:30px;}
@@ -362,11 +362,13 @@
         </div>
       </div>
 
-      <button type="button" class="arrow arrow-prev" id="arrow-prev" onclick="slide(-1)" aria-label="Tee shirt précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
-      <button type="button" class="arrow arrow-next" id="arrow-next" onclick="slide(1)" aria-label="Tee shirt suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
     </div>
 
-    <div class="dots" id="dots" role="tablist" aria-label="Choisir un tee shirt"></div>
+    <div class="carousel-row">
+      <button type="button" class="arrow" id="arrow-prev" onclick="slide(-1)" aria-label="Tee shirt précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="dots" id="dots" role="tablist" aria-label="Choisir un tee shirt"></div>
+      <button type="button" class="arrow" id="arrow-next" onclick="slide(1)" aria-label="Tee shirt suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+    </div>
     <button type="button" class="see-all-btn" id="see-all-btn" onclick="showAll()">Voir tout</button>
 
   </section>
@@ -563,7 +565,6 @@
       }
     });
     renderDots(list.length);
-    placeArrows();
   }
 
   function renderDots(n){
@@ -589,17 +590,6 @@
     renderSlide(dir);
   }
 
-  // Place les flèches au milieu de l'image du tee shirt affiché
-  function placeArrows(){
-    const cur = document.querySelector('#product-grid .card.current .card-visual');
-    const slot = document.getElementById('grid-home-slot');
-    if(!cur || !slot) return;
-    const y = cur.offsetTop + cur.offsetHeight / 2;
-    ['arrow-prev','arrow-next'].forEach(id => { document.getElementById(id).style.top = y + 'px'; });
-  }
-  window.addEventListener('resize', placeArrows);
-  window.addEventListener('load', placeArrows);
-  document.querySelectorAll('#product-grid .card-visual img').forEach(img => img.addEventListener('load', placeArrows));
 
   function slide(step){
     const n = gridCards().length;
