@@ -125,8 +125,20 @@ async function upstashGet(key) {
   }
 }
 
+// Authentification admin : le secret est attendu dans l'en-tête "Authorization: Bearer <ADMIN_SECRET>"
+// (plus jamais dans l'URL, pour qu'il n'apparaisse ni dans l'historique ni dans les logs).
 function checkAdminSecret(req, res) {
-  if (!process.env.ADMIN_SECRET || req.query.secret !== process.env.ADMIN_SECRET) {
+  const secret = process.env.ADMIN_SECRET;
+  const header = req.headers.authorization;
+  let ok = false;
+  if (secret && typeof header === 'string') {
+    const match = header.match(/^Bearer\s+(.+)$/i);
+    if (match) {
+      const digest = v => crypto.createHash('sha256').update(v).digest();
+      ok = crypto.timingSafeEqual(digest(match[1].trim()), digest(secret));
+    }
+  }
+  if (!ok) {
     res.sendStatus(401);
     return false;
   }
