@@ -184,9 +184,9 @@
         const code = codeInput.value.trim();
         cb.disabled = true;
         try {
-          await fetch(`${BACKEND_URL}/api/orders/${id}/delivered?secret=${encodeURIComponent(code)}`, {
+          await fetch(`${BACKEND_URL}/api/orders/${id}/delivered`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${code}` },
             body: JSON.stringify({ delivered: cb.checked })
           });
         } catch (err) {
@@ -212,7 +212,7 @@
     ordersMsg.textContent = 'Chargement...';
     ordersList.innerHTML = '';
     try {
-      const res = await fetch(`${BACKEND_URL}/api/orders?secret=${encodeURIComponent(code)}`);
+      const res = await fetch(`${BACKEND_URL}/api/orders`, { headers: { 'Authorization': `Bearer ${code}` } });
       if (res.status === 401) {
         ordersMsg.textContent = '❌ Code admin incorrect.';
         return;
@@ -226,7 +226,7 @@
 
       // Stats de visite (affichées en plus, ne bloque pas si ça échoue)
       try {
-        const statsRes = await fetch(`${BACKEND_URL}/api/stats?secret=${encodeURIComponent(code)}`);
+        const statsRes = await fetch(`${BACKEND_URL}/api/stats`, { headers: { 'Authorization': `Bearer ${code}` } });
         if (statsRes.ok) {
           const stats = await statsRes.json();
           const summaryPanel = document.getElementById('summary-panel');
