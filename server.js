@@ -16,13 +16,18 @@ const PORT = process.env.PORT || 3000;
 
 // Prix par modèle (FCFA)
 const PRICES = {
+  'ORIGINAL L3GACY VOL1': 7000,
   'STAR VOL 1': 7000,
   'L3 VOL 1': 7000,
   'MIND VOL 1': 8000,
   'RICH VOL 1': 7000,
 };
+function isKnownProduct(title) {
+  return typeof title === 'string' && Object.prototype.hasOwnProperty.call(PRICES, title);
+}
 function priceFor(title) {
-  return PRICES[title] ?? 7000; // valeur de secours si un titre est inconnu
+  // Pas de prix de secours : un titre inconnu renvoie undefined (le checkout les refuse avant d'arriver ici).
+  return isKnownProduct(title) ? PRICES[title] : undefined;
 }
 
 // --- Stockage des commandes sur Upstash Redis (survit aux redéploiements, contrairement à un fichier local) ---
@@ -163,6 +168,14 @@ app.post('/api/checkout', async (req, res) => {
     }
     if (!['wave', 'orange'].includes(payment_method)) {
       return res.status(400).json({ error: 'Mode de paiement invalide (wave ou orange attendu).' });
+    }
+
+    // Tous les produits du panier doivent exister dans PRICES, sinon on refuse (aucune commande, aucun paiement).
+    const unknownTitles = items
+      .filter(item => !(item && isKnownProduct(item.title)))
+      .map(item => String(item && item.title !== undefined ? item.title : '(sans titre)').slice(0, 60));
+    if (unknownTitles.length > 0) {
+      return res.status(400).json({ error: `Produit inconnu dans le panier : ${unknownTitles.join(', ')}.` });
     }
 
     const transaction_id = uuidv4();
