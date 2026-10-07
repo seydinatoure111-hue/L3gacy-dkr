@@ -83,22 +83,34 @@ async function readOrders() {
     const res = await fetch(`${process.env.UPSTASH_REDIS_REST_URL}/get/orders`, {
       headers: { 'Authorization': `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` }
     });
+    if (!res.ok) {
+      const httpError = new Error(`Upstash HTTP ${res.status} ${res.statusText} (lecture des commandes)`);
+      httpError.upstashHttp = true;
+      throw httpError;
+    }
     const data = await res.json();
     return data.result ? JSON.parse(data.result) : {};
   } catch (err) {
     console.error('Erreur lecture des commandes (Upstash) :', err);
+    if (err.upstashHttp) throw err; // une erreur HTTP d'Upstash ne doit pas passer pour "aucune commande"
     return {};
   }
 }
 async function writeOrders(orders) {
   try {
-    await fetch(`${process.env.UPSTASH_REDIS_REST_URL}/set/orders`, {
+    const res = await fetch(`${process.env.UPSTASH_REDIS_REST_URL}/set/orders`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` },
       body: JSON.stringify(orders)
     });
+    if (!res.ok) {
+      const httpError = new Error(`Upstash HTTP ${res.status} ${res.statusText} (écriture des commandes)`);
+      httpError.upstashHttp = true;
+      throw httpError;
+    }
   } catch (err) {
     console.error('Erreur écriture des commandes (Upstash) :', err);
+    if (err.upstashHttp) throw err; // une écriture refusée ne doit pas passer pour réussie
   }
 }
 
@@ -160,7 +172,20 @@ async function unitechRequest(action, data = {}) {
     },
     body: JSON.stringify(data)
   });
-  return response.json();
+
+  // Réponse HTTP en erreur (4xx / 5xx) : on lève une erreur (enregistrée par le catch de la route appelante)
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => '');
+    throw new Error(`UnitechPay HTTP ${response.status} ${response.statusText} (action=${action}) : ${errorBody.slice(0, 500)}`);
+  }
+
+  // Réponse qui n'est pas un JSON valide : même traitement
+  const rawBody = await response.text();
+  try {
+    return JSON.parse(rawBody);
+  } catch (err) {
+    throw new Error(`UnitechPay : réponse non JSON (action=${action}, HTTP ${response.status}) : ${rawBody.slice(0, 500)}`);
+  }
 }
 
 async function upstashIncr(key) {
@@ -220,6 +245,25 @@ app.post('/api/checkout', async (req, res) => {
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Panier vide.' });
+    }
+
+    // Validation stricte de chaque article du panier
+    for (const item of items) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return res.status(400).json({ error: 'Panier invalide : article incorrect.' });
+      }
+      if (typeof item.title !== 'string' || item.title.trim() === '') {
+        return res.status(400).json({ error: 'Panier invalide : titre de produit manquant.' });
+      }
+      if (typeof item.color !== 'string' || item.color.trim() === '') {
+        return res.status(400).json({ error: 'Panier invalide : couleur manquante.' });
+      }
+      if (item.title.length > 100) {
+        return res.status(400).json({ error: 'Panier invalide : titre de produit trop long.' });
+      }
+      if (item.color.length > 50) {
+        return res.status(400).json({ error: 'Panier invalide : couleur trop longue.' });
+      }
     }
     if (!['wave', 'orange'].includes(payment_method)) {
       return res.status(400).json({ error: 'Mode de paiement invalide (wave ou orange attendu).' });
@@ -388,31 +432,46 @@ app.post('/api/webhook/unitechpay', async (req, res) => {
 // --- 3. Vérifier le statut d'une commande depuis le frontend ---
 app.get('/api/orders/:id', async (req, res) => {
   if (!checkAdminSecret(req, res)) return;
-  const orders = await readOrders();
-  const order = orders[req.params.id];
-  if (!order) return res.status(404).json({ error: 'Introuvable' });
-  res.json(order);
+  try {
+    const orders = await readOrders();
+    const order = orders[req.params.id];
+    if (!order) return res.status(404).json({ error: 'Introuvable' });
+    res.json(order);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
 });
 
 // --- 4. Liste de toutes les commandes, protégée par un code admin (pour la page /admin) ---
 app.get('/api/orders', async (req, res) => {
   if (!checkAdminSecret(req, res)) return;
-  const orders = await readOrders();
-  const list = Object.values(orders).sort(
-    (a, b) => new Date(b.created_at) - new Date(a.created_at)
-  );
-  res.json(list);
+  try {
+    const orders = await readOrders();
+    const list = Object.values(orders).sort(
+      (a, b) => new Date(b.created_at) - new Date(a.created_at)
+    );
+    res.json(list);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
 });
 
 // --- 5. Marquer une commande comme livrée (ou non), depuis la page /admin ---
 app.post('/api/orders/:id/delivered', async (req, res) => {
   if (!checkAdminSecret(req, res)) return;
-  const orders = await readOrders();
-  const order = orders[req.params.id];
-  if (!order) return res.status(404).json({ error: 'Introuvable' });
-  order.delivered = !!req.body.delivered;
-  await writeOrders(orders);
-  res.json(order);
+  try {
+    const orders = await readOrders();
+    const order = orders[req.params.id];
+    if (!order) return res.status(404).json({ error: 'Introuvable' });
+    order.delivered = !!req.body.delivered;
+    await writeOrders(orders);
+    res.json(order);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
 });
 
 // --- 6. Suivi des visites du site (pour les statistiques sur /admin) ---

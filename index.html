@@ -262,6 +262,10 @@
     transition:background .2s;
   }
   .dot.active{background:#000;}
+  /* Sur grand écran : le carrousel garde une taille raisonnable (mobile inchangé) */
+  @media(min-width:900px){
+    #grid-home-slot,.carousel-row{max-width:640px;margin-left:auto;margin-right:auto;}
+  }
   .see-all-btn{
     display:block;width:100%;max-width:320px;margin:20px auto 0;padding:15px 20px;
     background:#000;color:#fff;border:none;border-radius:999px;font-size:14px;font-weight:700;
