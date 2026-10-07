@@ -296,6 +296,7 @@ app.post('/api/webhook/unitechpay', async (req, res) => {
 
 // --- 3. Vérifier le statut d'une commande depuis le frontend ---
 app.get('/api/orders/:id', async (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
   const orders = await readOrders();
   const order = orders[req.params.id];
   if (!order) return res.status(404).json({ error: 'Introuvable' });
