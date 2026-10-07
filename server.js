@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: 'https://l3gacy-dakar.pages.dev' }));
 app.use(express.json({
   verify: (req, res, buf) => { req.rawBody = buf; }
 }));
