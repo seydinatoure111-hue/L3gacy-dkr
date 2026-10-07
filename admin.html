@@ -86,7 +86,32 @@
   window.OneSignalDeferred = window.OneSignalDeferred || [];
 
   btn.addEventListener('click', async () => {
+    // Le code admin doit être valide AVANT tout appel OneSignal (init / permission / login).
+    const adminCode = codeInput.value.trim();
+    if (!adminCode) {
+      log("Entre le code admin d'abord.");
+      return;
+    }
     btn.disabled = true;
+    log("Vérification du code admin...");
+    try {
+      const check = await fetch(`${BACKEND_URL}/api/stats`, { headers: { 'Authorization': `Bearer ${adminCode}` } });
+      if (check.status === 401) {
+        log("❌ Code admin incorrect.");
+        btn.disabled = false;
+        return;
+      }
+      if (!check.ok) {
+        log("❌ Erreur serveur pendant la vérification du code admin.");
+        btn.disabled = false;
+        return;
+      }
+    } catch (err) {
+      log("❌ Impossible de vérifier le code admin.");
+      btn.disabled = false;
+      return;
+    }
+    log("Code admin vérifié.");
     log("Bouton cliqué, chargement de OneSignal...");
     try {
       if (typeof OneSignal === 'undefined' && !window.OneSignalDeferred) {
