@@ -127,6 +127,14 @@ async function sendOneSignalNotification(text) {
 }
 
 // --- Notification Telegram ---
+// Échappe le minimum requis par Telegram en parse_mode HTML (& < >) pour les données venant des clients.
+function escapeTelegramHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 async function sendTelegramNotification(text) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -334,10 +342,10 @@ app.post('/api/webhook/unitechpay', async (req, res) => {
       order.payment_method_confirmed = data.method || order.payment_method;
       await writeOrders(orders);
 
-      const itemsList = order.items.map(i => `• ${i.title} — ${i.color}`).join('\n');
+      const itemsList = order.items.map(i => `• ${escapeTelegramHtml(i.title)} — ${escapeTelegramHtml(i.color)}`).join('\n');
       const c = order.customer || {};
       await sendTelegramNotification(
-        `🛒 <b>Nouvelle commande payée</b>\n\n${itemsList}\n\n💰 ${order.amount} FCFA\n📱 ${data.method || order.payment_method}\n\n👤 ${c.name || ''}\n📞 ${c.phone || ''}\n📍 ${c.address || ''}`
+        `🛒 <b>Nouvelle commande payée</b>\n\n${itemsList}\n\n💰 ${escapeTelegramHtml(order.amount)} FCFA\n📱 ${escapeTelegramHtml(data.method || order.payment_method)}\n\n👤 ${escapeTelegramHtml(c.name)}\n📞 ${escapeTelegramHtml(c.phone)}\n📍 ${escapeTelegramHtml(c.address)}`
       );
       await sendOneSignalNotification(
         `${order.items.map(i => i.title).join(', ')} — ${order.amount} FCFA — ${c.phone || ''} — ${c.address || ''}`
