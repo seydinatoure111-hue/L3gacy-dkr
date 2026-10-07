@@ -225,6 +225,29 @@ app.post('/api/checkout', async (req, res) => {
       return res.status(400).json({ error: 'Mode de paiement invalide (wave ou orange attendu).' });
     }
 
+    // Validation stricte des informations client
+    if (!customer || typeof customer !== 'object' || Array.isArray(customer)) {
+      return res.status(400).json({ error: 'Informations client manquantes ou invalides.' });
+    }
+    if (typeof customer.phone !== 'string' || customer.phone.trim() === '') {
+      return res.status(400).json({ error: 'Le numéro de téléphone est obligatoire.' });
+    }
+    if (typeof customer.address !== 'string' || customer.address.trim() === '') {
+      return res.status(400).json({ error: 'L\'adresse est obligatoire.' });
+    }
+    if (customer.name !== undefined && customer.name !== null && typeof customer.name !== 'string') {
+      return res.status(400).json({ error: 'Le nom est invalide.' });
+    }
+    if (customer.phone.length > 30) {
+      return res.status(400).json({ error: 'Le numéro de téléphone est trop long.' });
+    }
+    if (customer.address.length > 300) {
+      return res.status(400).json({ error: 'L\'adresse est trop longue.' });
+    }
+    if (customer.name && customer.name.length > 100) {
+      return res.status(400).json({ error: 'Le nom est trop long.' });
+    }
+
     // Tous les produits du panier doivent exister dans PRICES, sinon on refuse (aucune commande, aucun paiement).
     const unknownTitles = items
       .filter(item => !(item && isKnownProduct(item.title)))
