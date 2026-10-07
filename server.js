@@ -14,6 +14,53 @@ app.use(express.urlencoded({ extended: true })); // au cas où un service enverr
 
 const PORT = process.env.PORT || 3000;
 
+// --- Rate limiting simple en mémoire (par IP, fenêtre fixe) ---
+// Render place l'app derrière un proxy : on lui fait confiance (1 seul saut) pour que req.ip soit l'IP du visiteur
+// et non celle du proxy. Les en-têtes d'IP envoyés par le visiteur ne sont plus lus directement.
+app.set('trust proxy', 1);
+function clientIp(req) {
+  return req.ip || req.socket.remoteAddress || 'inconnue';
+}
+
+function makeRateLimiter(maxRequests, windowMs) {
+  const hits = new Map(); // ip -> { count, resetAt }
+  const MAX_ENTRIES = 5000; // garde-fou mémoire
+
+  // Nettoyage régulier des entrées expirées
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, entry] of hits) {
+      if (entry.resetAt <= now) hits.delete(ip);
+    }
+  }, 60 * 1000).unref();
+
+  return (req, res, next) => {
+    const now = Date.now();
+    const ip = clientIp(req);
+    let entry = hits.get(ip);
+
+    if (!entry || entry.resetAt <= now) {
+      if (!entry && hits.size >= MAX_ENTRIES) {
+        for (const [key, e] of hits) { if (e.resetAt <= now) hits.delete(key); }
+        if (hits.size >= MAX_ENTRIES) hits.delete(hits.keys().next().value); // supprime la plus ancienne
+      }
+      entry = { count: 0, resetAt: now + windowMs };
+      hits.set(ip, entry);
+    }
+
+    entry.count++;
+    if (entry.count > maxRequests) {
+      res.set('Retry-After', String(Math.ceil((entry.resetAt - now) / 1000)));
+      return res.status(429).json({ error: 'Trop de requêtes. Réessaie plus tard.' });
+    }
+    next();
+  };
+}
+
+// Enregistrés avant les vraies routes : si la limite n'est pas dépassée, la requête continue vers la route.
+app.post('/api/checkout', makeRateLimiter(10, 60 * 1000));
+app.post('/api/track', makeRateLimiter(60, 60 * 1000));
+
 // Prix par modèle (FCFA)
 const PRICES = {
   'ORIGINAL L3GACY VOL1': 7000,
