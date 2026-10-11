@@ -65,7 +65,7 @@ app.post('/api/track', makeRateLimiter(60, 60 * 1000));
 const PRICES = {
   'ORIGINAL L3GACY VOL1': 7000,
   'STAR VOL 1': 7000,
-  'L3 VOL 1': 7000,
+  'FLOWER VOL 1': 7000,
   'MIND VOL 1': 8000,
   'RICH VOL 1': 7000,
 };
